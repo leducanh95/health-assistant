@@ -1,0 +1,18 @@
+.env
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+
+# Development/reference scripts (not needed at runtime)
+assistant/
+documents/
+
+# Frontend build artifacts (node_modules only; src is needed for Docker build)
+frontend/node_modules/
+
+# Local dev tooling
+*.sh
+*.md

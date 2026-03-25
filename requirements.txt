@@ -4,3 +4,7 @@ langgraph==0.5.2
 langchain-google-genai==2.1.7
 pypdf==5.7.0
 faiss-cpu==1.11.0
+google-adk>=1.0.0
+python-dotenv>=1.0.0
+fastapi>=0.115.0
+uvicorn>=0.30.0

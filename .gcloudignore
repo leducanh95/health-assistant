@@ -1,0 +1,29 @@
+# Rules for gcloud builds submit (Cloud Build context).
+# Similar to .gitignore but KEEPS vector_db/ — the FAISS index must be
+# baked into the Docker image and is intentionally not committed to git.
+
+.env
+.git
+.gitignore
+.gcloudignore
+.venv
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+
+# Offline scripts — not needed to build the image
+assistant/
+scripts/
+documents/
+
+# Frontend deps — rebuilt inside Docker by npm ci
+frontend/node_modules/
+
+# Dev tooling
+*.md
+.vscode/
+.adk/
+
+# vector_db/ is intentionally NOT excluded here so the FAISS index
+# is included in the Cloud Build context and baked into the image.
