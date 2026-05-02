@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build the FAISS vector index from PDF documents.
+"""Build the FAISS vector index from the knowledge corpus.
+
+Ingests:
+  - PDF documents in `documents/pdf/`  (G6PD reference, Vietnamese)
+  - Markdown documents in `documents/who/`  (WHO summaries, VI + EN)
 
 Usage:
     python scripts/build_index.py
@@ -10,27 +14,55 @@ import sys
 # Ensure project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter  # noqa: E402
+from langchain_community.document_loaders import (  # noqa: E402
+    DirectoryLoader,
+    PyPDFLoader,
+    TextLoader,
+)
+from langchain_community.vectorstores import FAISS  # noqa: E402
+from langchain_google_genai import GoogleGenerativeAIEmbeddings  # noqa: E402
 
-from app.config import get_settings
+from app.config import get_settings  # noqa: E402
 
 
 def build_index() -> None:
     settings = get_settings()
 
-    print(f"Loading PDFs from: {settings.pdf_folder_path}")
-    loader = DirectoryLoader(
-        path=settings.pdf_folder_path,
-        glob="*.pdf",
-        loader_cls=PyPDFLoader,
-    )
-    documents = loader.load()
-    print(f"Loaded {len(documents)} pages")
+    documents = []
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=100)
+    if os.path.isdir(settings.pdf_folder_path):
+        print(f"Loading PDFs from: {settings.pdf_folder_path}")
+        pdf_loader = DirectoryLoader(
+            path=settings.pdf_folder_path,
+            glob="*.pdf",
+            loader_cls=PyPDFLoader,
+        )
+        pdf_docs = pdf_loader.load()
+        print(f"  → {len(pdf_docs)} PDF pages")
+        documents.extend(pdf_docs)
+
+    if os.path.isdir(settings.who_docs_path):
+        print(f"Loading WHO markdown from: {settings.who_docs_path}")
+        md_loader = DirectoryLoader(
+            path=settings.who_docs_path,
+            glob="*.md",
+            loader_cls=TextLoader,
+            loader_kwargs={"encoding": "utf-8"},
+        )
+        md_docs = md_loader.load()
+        print(f"  → {len(md_docs)} markdown files")
+        documents.extend(md_docs)
+
+    if not documents:
+        raise SystemExit(
+            "No documents found. Add files under documents/pdf or "
+            "documents/who and try again."
+        )
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=512, chunk_overlap=100
+    )
     chunks = splitter.split_documents(documents)
     print(f"Created {len(chunks)} chunks")
 

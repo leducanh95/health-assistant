@@ -1,3 +1,4 @@
+import logging
 import os
 import warnings
 
@@ -9,13 +10,23 @@ warnings.filterwarnings(
     message=".*there are non-text parts in the response.*",
 )
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-from app.api.routes import chat, health
-from app.config import get_settings
+from app.api.routes import (  # noqa: E402
+    auth,
+    babies,
+    chat,
+    health,
+    measurements,
+    milestones,
+    reference,
+    vaccinations,
+)
+from app.config import get_settings  # noqa: E402
+from app.core.db import init_db  # noqa: E402
 
 _FRONTEND_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
@@ -23,9 +34,17 @@ _FRONTEND_DIR = os.path.abspath(
 
 
 def create_app() -> FastAPI:
+    logging.basicConfig(level=logging.INFO)
     settings = get_settings()
+    logging.getLogger(__name__).info(
+        "Starting Baby Health Assistant — model=%s vertexai=%s api_key_set=%s",
+        settings.llm_model,
+        settings.google_genai_use_vertexai,
+        bool(settings.google_api_key),
+    )
+    init_db()
 
-    application = FastAPI(title="G6PD Health Assistant API")
+    application = FastAPI(title="Baby Health Assistant API")
 
     application.add_middleware(
         CORSMiddleware,
@@ -35,7 +54,16 @@ def create_app() -> FastAPI:
     )
 
     application.include_router(health.router)
+    application.include_router(auth.router)
     application.include_router(chat.router)
+    application.include_router(babies.router)
+    application.include_router(measurements.router)
+    application.include_router(measurements.status_router)
+    application.include_router(milestones.router)
+    application.include_router(milestones.status_router)
+    application.include_router(vaccinations.router)
+    application.include_router(vaccinations.status_router)
+    application.include_router(reference.router)
 
     _mount_spa(application)
 
@@ -49,7 +77,11 @@ def _mount_spa(application: FastAPI) -> None:
 
     assets_dir = os.path.join(_FRONTEND_DIR, "assets")
     if os.path.isdir(assets_dir):
-        application.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+        application.mount(
+            "/assets",
+            StaticFiles(directory=assets_dir),
+            name="assets",
+        )
 
     @application.get("/{full_path:path}", include_in_schema=False)
     def serve_spa():

@@ -1,115 +1,82 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import "./App.css";
+import AuthPage from "./components/AuthPage.jsx";
+import BabySelector from "./components/BabySelector.jsx";
+import ChatPanel from "./components/ChatPanel.jsx";
+import FeedingGuide from "./components/FeedingGuide.jsx";
+import GrowthPanel from "./components/GrowthPanel.jsx";
+import LanguageToggle from "./components/LanguageToggle.jsx";
+import MilestoneTracker from "./components/MilestoneTracker.jsx";
+import VaccineSchedule from "./components/VaccineSchedule.jsx";
+import { I18nProvider, useI18n } from "./i18n/index.jsx";
+import { AuthProvider, useAuth } from "./state/authStore.jsx";
+import { BabyProvider, useBabies } from "./state/babyStore.jsx";
 
-const SUGGESTED = [
-  "Thiếu men G6PD là gì?",
-  "Người thiếu men G6PD cần kiêng ăn gì?",
-  "Thuốc nào cần tránh khi thiếu men G6PD?",
-  "Trẻ sơ sinh thiếu men G6PD có nguy hiểm không?",
+const TABS = [
+  { key: "growth", label: "nav.growth" },
+  { key: "milestones", label: "nav.milestones" },
+  { key: "vaccines", label: "nav.vaccines" },
+  { key: "feeding", label: "nav.feeding" },
+  { key: "chat", label: "nav.chat" },
 ];
 
-const WELCOME = {
-  id: "welcome",
-  role: "assistant",
-  text: "Xin chào! Tôi là trợ lý sức khỏe chuyên về **thiếu men G6PD**.\n\nTôi có thể giúp bạn hiểu về triệu chứng, thực phẩm cần kiêng, thuốc cần tránh và cách quản lý bệnh. Hãy đặt câu hỏi hoặc chọn một gợi ý bên dưới.",
-};
+function MainContent({ tab }) {
+  const { activeBaby } = useBabies();
+  const { t } = useI18n();
 
-function formatText(text) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\n/g, "<br/>");
+  if (tab === "chat") return <ChatPanel baby={activeBaby} />;
+
+  if (!activeBaby) {
+    return (
+      <div className="empty-state">
+        <p>{t("baby.no_babies")}</p>
+      </div>
+    );
+  }
+
+  switch (tab) {
+    case "growth":
+      return <GrowthPanel baby={activeBaby} />;
+    case "milestones":
+      return <MilestoneTracker baby={activeBaby} />;
+    case "vaccines":
+      return <VaccineSchedule baby={activeBaby} />;
+    case "feeding":
+      return <FeedingGuide baby={activeBaby} />;
+    default:
+      return null;
+  }
 }
 
-export default function App() {
-  const [messages, setMessages] = useState([WELCOME]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sessionId, setSessionId] = useState(null);
-  // Default open on desktop, closed on mobile
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
-  const bottomRef = useRef(null);
-  const textareaRef = useRef(null);
-  const hasUserMessages = messages.some((m) => m.role === "user");
+function Shell() {
+  const { t } = useI18n();
+  const { activeBaby } = useBabies();
+  const { user, logout } = useAuth();
+  const [tab, setTab] = useState("growth");
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => window.innerWidth >= 768,
+  );
   const isMobile = () => window.innerWidth < 768;
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
-
-  // Close sidebar on resize to mobile
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 768) setSidebarOpen(false);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  const closeSidebarOnMobile = () => {
+  const closeOnMobile = () => {
     if (isMobile()) setSidebarOpen(false);
-  };
-
-  const sendMessage = async (text) => {
-    const msg = (text || input).trim();
-    if (!msg || loading) return;
-
-    closeSidebarOnMobile();
-    setMessages((prev) => [...prev, { id: Date.now(), role: "user", text: msg }]);
-    setInput("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, session_id: sessionId }),
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setSessionId(data.session_id);
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, role: "assistant", text: data.response },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: Date.now() + 1, role: "assistant", text: "Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.", error: true },
-      ]);
-    } finally {
-      setLoading(false);
-      textareaRef.current?.focus();
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const handleReset = () => {
-    setMessages([WELCOME]);
-    setSessionId(null);
-    setInput("");
-    closeSidebarOnMobile();
-    textareaRef.current?.focus();
   };
 
   return (
     <div className="app">
-      {/* Mobile overlay backdrop */}
       {sidebarOpen && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
-      {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="sidebar-top">
           <div className="brand">
-            <div className="brand-icon">G6</div>
-            {sidebarOpen && <span className="brand-name">G6PD Assistant</span>}
+            <div className="brand-icon">B</div>
+            {sidebarOpen && (
+              <span className="brand-name">{t("app.title")}</span>
+            )}
           </div>
           <button
             className="toggle-btn"
@@ -122,39 +89,39 @@ export default function App() {
 
         {sidebarOpen && (
           <>
-            <button className="new-chat-btn" onClick={handleReset}>
-              + Cuộc hội thoại mới
-            </button>
+            <div className="sidebar-section">
+              <BabySelector />
+            </div>
 
             <nav className="sidebar-nav">
-              <p className="nav-label">Chủ đề phổ biến</p>
+              <p className="nav-label">Sections</p>
               <ul>
-                {[
-                  ["Thiếu men G6PD là gì?", "Tổng quan bệnh"],
-                  ["Triệu chứng của thiếu men G6PD là gì?", "Triệu chứng"],
-                  ["Người thiếu men G6PD cần kiêng ăn gì?", "Thực phẩm cần tránh"],
-                  ["Thuốc nào cần tránh khi thiếu men G6PD?", "Thuốc cần tránh"],
-                  ["Cách quản lý và sống chung với thiếu men G6PD?", "Quản lý bệnh"],
-                ].map(([query, label]) => (
-                  <li key={label} onClick={() => { sendMessage(query); closeSidebarOnMobile(); }}>
-                    {label}
+                {TABS.map(({ key, label }) => (
+                  <li
+                    key={key}
+                    className={tab === key ? "active" : ""}
+                    onClick={() => {
+                      setTab(key);
+                      closeOnMobile();
+                    }}
+                  >
+                    {t(label)}
                   </li>
                 ))}
               </ul>
             </nav>
 
             <div className="sidebar-footer">
-              <p>Dữ liệu từ tài liệu y tế Bionet Việt Nam</p>
+              <LanguageToggle />
+              <p>{t("app.subtitle")}</p>
             </div>
           </>
         )}
       </aside>
 
-      {/* Main */}
       <main className="main">
         <header className="topbar">
           <div className="topbar-left">
-            {/* Hamburger — mobile only */}
             <button
               className="hamburger"
               onClick={() => setSidebarOpen((v) => !v)}
@@ -162,87 +129,70 @@ export default function App() {
             >
               ☰
             </button>
-            <div className="topbar-icon">G6</div>
+            <div className="topbar-icon">B</div>
             <div>
-              <h1>Trợ lý sức khỏe G6PD</h1>
+              <h1>{t("app.title")}</h1>
               <span className="status">
                 <span className="status-dot" />
-                Đang hoạt động
+                {activeBaby
+                  ? `${activeBaby.name} · ${t("baby.sex." + activeBaby.sex)}`
+                  : t("baby.none_selected")}
               </span>
             </div>
           </div>
-          <button className="topbar-reset" onClick={handleReset}>
-            Cuộc hội thoại mới
-          </button>
-        </header>
-
-        <div className="feed">
-          <div className="feed-inner">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`msg ${msg.role}`}>
-                {msg.role === "assistant" && (
-                  <div className="msg-avatar">G6</div>
-                )}
-                <div className={`msg-content ${msg.error ? "error" : ""}`}>
-                  {msg.role === "assistant" ? (
-                    <div dangerouslySetInnerHTML={{ __html: formatText(msg.text) }} />
-                  ) : (
-                    msg.text
-                  )}
-                </div>
-                {msg.role === "user" && <div className="msg-avatar user">Tu</div>}
-              </div>
+          <div className="topbar-tabs">
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                className={`topbar-tab ${tab === key ? "active" : ""}`}
+                onClick={() => setTab(key)}
+              >
+                {t(label)}
+              </button>
             ))}
-
-            {loading && (
-              <div className="msg assistant">
-                <div className="msg-avatar">G6</div>
-                <div className="msg-content typing">
-                  <span /><span /><span />
-                </div>
-              </div>
-            )}
-
-            <div ref={bottomRef} />
           </div>
-
-          {/* Suggested questions — only before first user message */}
-          {!hasUserMessages && (
-            <div className="suggestions">
-              {SUGGESTED.map((q) => (
-                <button key={q} className="suggestion-chip" onClick={() => sendMessage(q)}>
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="composer">
-          <div className="composer-inner">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Hỏi về thiếu men G6PD..."
-              rows={1}
-              disabled={loading}
-            />
-            <button
-              className="send-btn"
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || loading}
-              aria-label="Gửi"
-            >
-              ↑
+          <div className="topbar-right">
+            <span className="user-email">{user?.email}</span>
+            <button className="logout-btn" onClick={logout}>
+              {t("auth.logout")}
             </button>
           </div>
-          <p className="composer-hint">
-            Thông tin chỉ mang tính tham khảo, không thay thế tư vấn y tế chuyên nghiệp.
-          </p>
+        </header>
+
+        <div className="content-area">
+          <MainContent tab={tab} />
         </div>
       </main>
     </div>
+  );
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="auth-loading">
+        <div className="spinner" />
+      </div>
+    );
+  }
+
+  if (!user) return <AuthPage />;
+
+  return (
+    <BabyProvider>
+      <Shell />
+    </BabyProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </I18nProvider>
   );
 }
