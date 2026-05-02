@@ -30,12 +30,20 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-# Parse and export KEY=VALUE lines; skip comments (#) and blank lines
+# Parse and export KEY=VALUE lines; skip comments (#) and blank lines.
+# Strips surrounding single or double quotes from values so that both
+#   KEY=value  and  KEY="value"  and  KEY='value'  work correctly.
 while IFS='=' read -r key remainder || [[ -n "$key" ]]; do
-  key="${key#"${key%%[![:space:]]*}"}"
-  key="${key%"${key##*[![:space:]]}"}"
+  key="${key#"${key%%[![:space:]]*}"}"   # trim leading whitespace
+  key="${key%"${key##*[![:space:]]}"}"   # trim trailing whitespace
   [[ -z "$key" || "$key" == \#* ]] && continue
   [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+  # Strip surrounding double quotes
+  remainder="${remainder#\"}"
+  remainder="${remainder%\"}"
+  # Strip surrounding single quotes
+  remainder="${remainder#\'}"
+  remainder="${remainder%\'}"
   export "$key"="$remainder"
 done < "${ENV_FILE}"
 
@@ -70,6 +78,7 @@ build_env_vars() {
     TEXT_EMBEDDING_MODEL
     LLM_MODEL
     LLM_PROVIDER
+    SECRET_KEY
   )
   for key in "${keys[@]}"; do
     local val="${!key:-}"
@@ -86,7 +95,7 @@ build_env_vars() {
 ENV_VARS="$(build_env_vars)"
 
 echo "========================================================"
-echo "  G6PD Health Assistant — Cloud Run Deployment"
+echo "  Baby Health Assistant — Cloud Run Deployment"
 echo "========================================================"
 echo "  Project  : ${GCP_PROJECT_ID}"
 echo "  Region   : ${GCP_REGION}"
@@ -131,6 +140,9 @@ gcloud builds submit . \
     --timeout=1200
 
 # ── Deploy to Cloud Run ───────────────────────────────────────────────────────
+# NOTE: The default DATABASE_URL uses SQLite (sqlite:///./data/app.db) which is
+# stored in the container's ephemeral filesystem. Data is lost on each restart
+# or new deployment. For production, set DATABASE_URL to a Cloud SQL instance.
 echo ">> Deploying to Cloud Run service '${SERVICE_NAME}'..."
 gcloud run deploy "${SERVICE_NAME}" \
     --image="${IMAGE}" \

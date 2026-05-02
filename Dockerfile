@@ -27,6 +27,9 @@ COPY g6pd_agent/ ./g6pd_agent/
 # Copy pre-built FAISS index (baked into image)
 COPY vector_db/ ./vector_db/
 
+# Copy WHO reference JSON files (required by who_data.py at runtime)
+COPY data/who/ ./data/who/
+
 # Copy built frontend from stage 1
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 

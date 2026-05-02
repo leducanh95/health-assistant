@@ -211,6 +211,20 @@ __marimo__/
 
 documents/pdf/*
 !documents/pdf/.gitkeep
+documents/who/*
+!documents/who/.gitkeep
 
 vector_db/faiss_index/*
 !vector_db/faiss_index/.gitkeep
+
+# Frontend – dependencies and build output
+frontend/node_modules/*
+frontend/dist/*
+
+# SQLite database (contains user PII: emails, hashed passwords, health records)
+# data/*.db
+# data/*.db-journal
+# data/*.db-wal
+# data/*.db-shm
+data/*
+!data/who/.gitkeep
