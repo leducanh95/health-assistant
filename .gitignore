@@ -227,4 +227,4 @@ frontend/dist/*
 # data/*.db-wal
 # data/*.db-shm
 data/*
-!data/who/.gitkeep
+!data/.gitkeep
