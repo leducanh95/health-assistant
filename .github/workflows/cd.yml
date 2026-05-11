@@ -1,0 +1,82 @@
+name: CD — Deploy to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+
+    env:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      ARTIFACT_REPO: ${{ secrets.ARTIFACT_REPO }}
+      SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Generate image tag
+        id: image
+        run: |
+          TAG="$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}"
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPO}/${SERVICE_NAME}:${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image via Cloud Build
+        run: |
+          gcloud builds submit . \
+            --tag="${{ steps.image.outputs.image }}" \
+            --project="${GCP_PROJECT_ID}" \
+            --timeout=1200
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE_NAME}" \
+            --image="${{ steps.image.outputs.image }}" \
+            --region="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=8080 \
+            --memory=1Gi \
+            --cpu=1 \
+            --timeout=300 \
+            --set-env-vars="^@^GOOGLE_API_KEY=${GOOGLE_API_KEY}@SECRET_KEY=${SECRET_KEY}@DATABASE_URL=${DATABASE_URL}@VECTOR_DB_PATH=/app/vector_db/faiss_index"
+
+      - name: Print service URL
+        run: |
+          gcloud run services describe "${SERVICE_NAME}" \
+            --region="${GCP_REGION}" \
+            --project="${GCP_PROJECT_ID}" \
+            --format="value(status.url)"
